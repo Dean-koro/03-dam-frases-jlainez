@@ -19,14 +19,31 @@ class FrasesDb {
     final ruta = join(await getDatabasesPath(), _nombreArchivo);
     return openDatabase(
       ruta,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $_tabla (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ffrase TEXT NOT NULL,
+          frase TEXT NOT NULL,
           autor TEXT NOT NULL)
           ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE frases_nueva (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              frase TEXT NOT NULL,
+              autor TEXT NOT NULL
+            )
+            ''');
+          await db.execute('''
+            INSERT INTO frases_nueva (id, frase, autor)
+            SELECT id, ffrase, autor FROM $_tabla
+            ''');
+          await db.execute('DROP TABLE $_tabla');
+          await db.execute('ALTER TABLE frases_nueva RENAME TO $_tabla');
+        }
       },
     );
   }
@@ -47,11 +64,11 @@ class FrasesDb {
   //modifica usando el id
   Future<int> actualizar(Frase frase) async {
     final db = await _database;
-    return db.update(_tabla, 
-    frase.toMap(),
-    where: 'id = ?',
-    whereArgs: [frase..id]
-    );
+    final id = frase.id;
+    if (id == null) {
+      throw ArgumentError.value(id, 'frase.id', 'No puede ser null al editar.');
+    }
+    return db.update(_tabla, frase.toMap(), where: 'id = ?', whereArgs: [id]);
   }
 
   //eliminar la frase con el id
